@@ -39,9 +39,13 @@ class Sampler:
                 samples.append(stratum_df.sample(n=k, random_state=self.rng.integers(1e9)))
             result = pd.concat(samples).reset_index(drop=True)
         elif frac is not None:
-            result = df.groupby(stratum_col, group_keys=False).apply(
-                lambda x: x.sample(frac=frac, random_state=self.rng.integers(1e9))
-            ).reset_index(drop=True)
+            samples = []
+            for stratum in df[stratum_col].unique():
+                stratum_df = df[df[stratum_col] == stratum]
+                samples.append(
+                    stratum_df.sample(frac=frac, random_state=self.rng.integers(1e9))
+                )
+            result = pd.concat(samples).reset_index(drop=True)
         else:
             raise ValueError("Must specify either n or frac")
         logger.info("Stratified sample: {} → {} rows", len(df), len(result))

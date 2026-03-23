@@ -13,6 +13,7 @@ dataspark/
 ├── timeseries/         # Decomposition, forecasting (ARIMA, ETS), feature extraction
 ├── deep_learning/      # PyTorch MLP & LSTM with training loop + early stopping
 ├── sampling/           # Stratified, cluster, systematic, reservoir, bootstrap
+├── visualization/      # Static charts, interactive sliders, multi-panel dashboards
 ├── connectors/         # SQL (SQLAlchemy) & PySpark data I/O
 └── utils/              # Validation helpers
 ```
@@ -39,7 +40,7 @@ ruff check dataspark/ tests/
 | Statistics | SciPy, Statsmodels |
 | Deep Learning | PyTorch (MLP, LSTM) |
 | Big Data | PySpark, SQLAlchemy |
-| Visualization | Matplotlib, Seaborn |
+| Visualization | Matplotlib, Seaborn, ipywidgets (interactive sliders) |
 | Testing | Pytest, pytest-cov |
 | CI/CD | GitHub Actions, Docker |
 
@@ -85,6 +86,48 @@ ruff check dataspark/ tests/
 - Stratified (proportional allocation), cluster, systematic, reservoir sampling
 - Bootstrap resampling with 95% CI
 - Cochran's sample size calculator with finite population correction
+
+### Visualization
+- **ChartBuilder**: 25+ static chart types covering all data domains
+  - Data profiling: missing matrix, missing bars, outlier scatter, before/after cleaning
+  - EDA: distributions with fitted overlays, correlation heatmaps, Q-Q plots, categorical bars
+  - Statistics: p-value forest plots, effect-size bars, group comparisons (box/violin/strip)
+  - ML: model comparison bars, feature importance, confusion matrix, PCA scree, residual analysis
+  - Time series: line plots with rolling mean, decomposition panels, forecast with CI bands, ACF/PACF
+  - Sampling: bootstrap CI distributions, sample-size curves, strata proportion comparison
+- **Dashboard**: Multi-panel composite dashboards (data quality, EDA overview, model report, time-series report)
+- **InteractiveExplorer** (Jupyter): ipywidgets-powered parameter exploration with live sliders
+  - Distribution explorer: column selector, bin slider, KDE toggle, distribution fit overlay
+  - Correlation explorer: method dropdown, minimum |r| threshold slider, annotation toggle
+  - Outlier explorer: method selector, threshold slider with live detection preview
+  - Missing-value explorer: imputation strategy selector with before/after distribution preview
+  - Scatter explorer: axis selectors, hue dropdown, alpha/size sliders, regression line toggle
+  - Time-series explorer: rolling window slider, period slider, decomposition toggle
+  - Sampling explorer: stratum selector, method dropdown, fraction slider with proportion comparison
+  - Hypothesis test explorer: column/test selectors, sample-size slider, effect-size gauge
+  - `launch()`: Tabbed interface combining all explorers
+
+```python
+# Static charts
+from dataspark.visualization import ChartBuilder
+cb = ChartBuilder()
+fig = cb.distribution(df["revenue"], bins=40, fit_dist="norm")
+fig = cb.correlation_heatmap(df, method="spearman")
+fig = cb.model_comparison(results_df)
+cb.save(fig, "output.png")
+
+# Multi-panel dashboards
+from dataspark.visualization import Dashboard
+dash = Dashboard()
+fig = dash.data_quality(df)
+fig = dash.eda_overview(df)
+
+# Interactive exploration in Jupyter (pip install dataspark[notebooks])
+from dataspark.visualization.interactive import InteractiveExplorer
+explorer = InteractiveExplorer(df)
+explorer.launch()          # tabbed interface with all explorers
+explorer.explore_outliers() # individual explorer with sliders
+```
 
 ## Docker
 

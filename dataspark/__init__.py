@@ -11,6 +11,7 @@ timeseries  : Trend detection, seasonality, forecasting.
 deep_learning: PyTorch-based neural network pipelines.
 sampling    : Stratified, cluster, systematic, and bootstrap sampling.
 connectors  : SQL / PySpark data connectors.
+visualization: Static charts, interactive sliders, multi-panel dashboards.
 """
 
 __version__ = "0.1.0"

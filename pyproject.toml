@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataspark"
+version = "0.1.0"
+description = "End-to-end ML/AI pipelines for data science R&D — data cleansing, EDA, statistical testing, ML, time-series, deep learning, and sampling."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "DataSpark Team"},
+]
+
+dependencies = [
+    "numpy>=1.24,<2.0",
+    "pandas>=2.0",
+    "scikit-learn>=1.3",
+    "scipy>=1.11",
+    "statsmodels>=0.14",
+    "matplotlib>=3.7",
+    "seaborn>=0.13",
+    "sqlalchemy>=2.0",
+    "pyyaml>=6.0",
+    "loguru>=0.7",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.12",
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "pre-commit>=3.6",
+]
+spark = [
+    "pyspark>=3.5",
+]
+torch = [
+    "torch>=2.1",
+]
+azure = [
+    "azureml-sdk>=1.54",
+    "azure-storage-blob>=12.19",
+]
+notebooks = [
+    "jupyter>=1.0",
+    "ipywidgets>=8.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["dataspark*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=dataspark --cov-report=term-missing"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: integration tests requiring external services",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

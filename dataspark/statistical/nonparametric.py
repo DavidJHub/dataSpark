@@ -1,0 +1,80 @@
+"""
+Non-Parametric Tests
+====================
+Mann-Whitney U, Wilcoxon, Kruskal-Wallis, Kolmogorov-Smirnov, etc.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+
+class NonParametricTests:
+    """Non-parametric hypothesis tests — no distributional assumptions."""
+
+    @staticmethod
+    def mann_whitney(group_a, group_b, alternative: str = "two-sided") -> dict:
+        """Mann-Whitney U test (independent samples)."""
+        stat, p = stats.mannwhitneyu(group_a, group_b, alternative=alternative)
+        n1, n2 = len(group_a), len(group_b)
+        # rank-biserial correlation as effect size
+        r = 1 - (2 * stat) / (n1 * n2)
+        return {
+            "test": "mann_whitney_u",
+            "statistic": stat,
+            "p_value": p,
+            "effect_size_r": r,
+            "alternative": alternative,
+        }
+
+    @staticmethod
+    def wilcoxon_signed_rank(x, y=None, alternative: str = "two-sided") -> dict:
+        """Wilcoxon signed-rank test (paired samples)."""
+        stat, p = stats.wilcoxon(x, y, alternative=alternative)
+        return {"test": "wilcoxon_signed_rank", "statistic": stat, "p_value": p}
+
+    @staticmethod
+    def kruskal_wallis(*groups) -> dict:
+        """Kruskal-Wallis H test (non-parametric ANOVA)."""
+        stat, p = stats.kruskal(*groups)
+        return {
+            "test": "kruskal_wallis",
+            "statistic": stat,
+            "p_value": p,
+            "n_groups": len(groups),
+        }
+
+    @staticmethod
+    def ks_two_sample(a, b) -> dict:
+        """Two-sample Kolmogorov-Smirnov test."""
+        stat, p = stats.ks_2samp(a, b)
+        return {"test": "ks_two_sample", "statistic": stat, "p_value": p}
+
+    @staticmethod
+    def friedman(*groups) -> dict:
+        """Friedman test for repeated measures (non-parametric)."""
+        stat, p = stats.friedmanchisquare(*groups)
+        return {"test": "friedman", "statistic": stat, "p_value": p, "n_groups": len(groups)}
+
+    @staticmethod
+    def runs_test(series: pd.Series) -> dict:
+        """Wald-Wolfowitz runs test for randomness."""
+        median = series.median()
+        binary = (series >= median).astype(int).values
+        runs = 1 + np.sum(np.diff(binary) != 0)
+        n1 = np.sum(binary == 1)
+        n0 = np.sum(binary == 0)
+        n = n1 + n0
+        expected = 1 + (2 * n1 * n0) / n
+        var = (2 * n1 * n0 * (2 * n1 * n0 - n)) / (n ** 2 * (n - 1)) if n > 1 else 1
+        z = (runs - expected) / np.sqrt(var) if var > 0 else 0
+        p = 2 * (1 - stats.norm.cdf(abs(z)))
+        return {
+            "test": "runs_test",
+            "n_runs": int(runs),
+            "expected_runs": expected,
+            "z_statistic": z,
+            "p_value": p,
+        }

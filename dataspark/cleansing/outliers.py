@@ -1,7 +1,7 @@
-"""
-Outlier Detection
-=================
-Multiple strategies: IQR, Z-score, Modified Z-score (MAD), Isolation Forest.
+"""Outlier detection and treatment utilities.
+
+Supported methods include IQR, Z-score, modified Z-score (MAD), and
+Isolation Forest for univariate anomaly detection.
 """
 
 from __future__ import annotations
@@ -14,7 +14,21 @@ from loguru import logger
 
 
 class OutlierDetector:
-    """Detect and optionally remove outliers from numeric columns."""
+    """Detect and optionally remove/cap outliers in numeric columns.
+
+    Parameters
+    ----------
+    method:
+        Detection method: ``"iqr"``, ``"zscore"``, ``"mad"``,
+        or ``"isolation_forest"``.
+    threshold:
+        Threshold factor used by ``iqr``, ``zscore``, and ``mad``.
+    contamination:
+        Expected outlier fraction used by Isolation Forest.
+    factor:
+        Optional alias for ``threshold`` kept for backward compatibility.
+        When provided, it takes precedence over ``threshold``.
+    """
 
     def __init__(
         self,
@@ -24,16 +38,25 @@ class OutlierDetector:
         *,
         factor: float | None = None,
     ) -> None:
+        """Initialize outlier detector configuration."""
         self.method = method
         self.threshold = factor if factor is not None else threshold
         self.contamination = contamination
 
     def detect(self, df: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:
-        """Return boolean mask — True where value is an outlier."""
+        """Return a boolean mask where ``True`` marks outlier values.
+
+        Parameters
+        ----------
+        df:
+            Input dataframe.
+        columns:
+            Optional subset of numeric columns. If ``None``, all numeric columns
+            are evaluated.
+        """
         cols = columns or df.select_dtypes(include="number").columns.tolist()
         mask = pd.DataFrame(False, index=df.index, columns=cols)
         for col in cols:
-            series = df[col].dropna()
             if self.method == "iqr":
                 mask[col] = self._iqr(df[col])
             elif self.method == "zscore":
@@ -47,7 +70,7 @@ class OutlierDetector:
         return mask
 
     def remove(self, df: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:
-        """Remove rows containing any outlier in the specified columns."""
+        """Drop rows containing any detected outlier across selected columns."""
         mask = self.detect(df, columns)
         keep = ~mask.any(axis=1)
         removed = (~keep).sum()
@@ -55,7 +78,11 @@ class OutlierDetector:
         return df.loc[keep].reset_index(drop=True)
 
     def cap(self, df: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:
-        """Winsorize: cap outliers at the boundary values instead of removing."""
+        """Winsorize numeric values by clipping to IQR boundaries.
+
+        This method always uses IQR-style boundaries even when ``method`` is set
+        to another detector, because clipping requires explicit lower/upper caps.
+        """
         df = df.copy()
         cols = columns or df.select_dtypes(include="number").columns.tolist()
         for col in cols:
@@ -65,26 +92,26 @@ class OutlierDetector:
             df[col] = df[col].clip(lower, upper)
         return df
 
-    # ------------------------------------------------------------------
-    # Strategies
-    # ------------------------------------------------------------------
-
     def _iqr(self, s: pd.Series) -> pd.Series:
+        """Detect outliers using the interquartile range rule."""
         q1, q3 = s.quantile(0.25), s.quantile(0.75)
         iqr = q3 - q1
         return (s < q1 - self.threshold * iqr) | (s > q3 + self.threshold * iqr)
 
     def _zscore(self, s: pd.Series) -> pd.Series:
+        """Detect outliers using standard z-scores."""
         z = (s - s.mean()) / s.std()
         return z.abs() > self.threshold
 
     def _mad(self, s: pd.Series) -> pd.Series:
+        """Detect outliers with modified z-score based on MAD."""
         median = s.median()
         mad = np.median(np.abs(s - median))
         modified_z = 0.6745 * (s - median) / (mad + 1e-10)
         return modified_z.abs() > self.threshold
 
     def _iforest(self, s: pd.Series) -> pd.Series:
+        """Detect outliers in a single series via Isolation Forest."""
         from sklearn.ensemble import IsolationForest
 
         clf = IsolationForest(contamination=self.contamination, random_state=42)

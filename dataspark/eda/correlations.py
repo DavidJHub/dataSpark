@@ -1,8 +1,8 @@
-"""
-Correlation Analysis
-====================
-Pearson, Spearman, Kendall, and point-biserial correlations
-with statistical significance testing.
+"""Correlation analysis with significance testing.
+
+This module provides :class:`CorrelationAnalyzer` to compute correlation
+matrices, pairwise statistical significance, point-biserial associations,
+and ranked strongest relationships.
 """
 
 from __future__ import annotations
@@ -12,30 +12,55 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from scipy import stats
-from loguru import logger
 
 
 class CorrelationAnalyzer:
-    """Compute and analyze correlations with significance tests."""
+    """Compute and analyze linear/rank correlations among numeric variables.
+
+    Parameters
+    ----------
+    df:
+        Input dataframe. Numeric subset is cached internally.
+    """
 
     def __init__(self, df: pd.DataFrame) -> None:
+        """Store dataframe and precompute numeric subset."""
         self.df = df
         self.numeric = df.select_dtypes(include="number")
 
     def correlation_matrix(
         self, method: Literal["pearson", "spearman", "kendall"] = "pearson"
     ) -> pd.DataFrame:
-        """Standard correlation matrix."""
+        """Return correlation matrix for numeric columns.
+
+        Parameters
+        ----------
+        method:
+            Correlation estimator passed to :meth:`pandas.DataFrame.corr`.
+        """
         return self.numeric.corr(method=method)
 
     def pairwise_significance(
         self, method: Literal["pearson", "spearman"] = "pearson", alpha: float = 0.05
     ) -> pd.DataFrame:
-        """Pairwise correlations with p-values and significance flags."""
+        """Compute pairwise correlations with p-values and effect labels.
+
+        Parameters
+        ----------
+        method:
+            Correlation test used for pairwise comparisons.
+        alpha:
+            Significance threshold for ``significant`` boolean flag.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Pairwise results sorted by ascending p-value.
+        """
         cols = self.numeric.columns
         rows = []
         for i, c1 in enumerate(cols):
-            for c2 in cols[i + 1:]:
+            for c2 in cols[i + 1 :]:
                 data = self.df[[c1, c2]].dropna()
                 if len(data) < 3:
                     continue
@@ -43,26 +68,35 @@ class CorrelationAnalyzer:
                     r, p = stats.pearsonr(data[c1], data[c2])
                 else:
                     r, p = stats.spearmanr(data[c1], data[c2])
-                rows.append({
-                    "var_1": c1,
-                    "var_2": c2,
-                    "correlation": r,
-                    "p_value": p,
-                    "significant": p < alpha,
-                    "strength": self._strength(r),
-                })
+                rows.append(
+                    {
+                        "var_1": c1,
+                        "var_2": c2,
+                        "correlation": r,
+                        "p_value": p,
+                        "significant": p < alpha,
+                        "strength": self._strength(r),
+                    }
+                )
         return pd.DataFrame(rows).sort_values("p_value")
 
     def point_biserial(self, binary_col: str, continuous_col: str) -> dict:
-        """Point-biserial correlation between a binary and continuous variable."""
+        """Compute point-biserial correlation for binary vs continuous pair.
+
+        Parameters
+        ----------
+        binary_col:
+            Binary-valued column (coded as 0/1 or equivalent).
+        continuous_col:
+            Continuous numeric column.
+        """
         data = self.df[[binary_col, continuous_col]].dropna()
         r, p = stats.pointbiserialr(data[binary_col], data[continuous_col])
         return {"correlation": r, "p_value": p, "binary": binary_col, "continuous": continuous_col}
 
     def top_correlations(self, n: int = 10, method: str = "pearson") -> pd.DataFrame:
-        """Return the top-n strongest correlations (absolute value)."""
+        """Return top ``n`` absolute correlations from upper matrix triangle."""
         corr = self.correlation_matrix(method)
-        # Upper triangle only
         mask = np.triu(np.ones_like(corr, dtype=bool), k=1)
         pairs = corr.where(mask).stack().reset_index()
         pairs.columns = ["var_1", "var_2", "correlation"]
@@ -71,6 +105,7 @@ class CorrelationAnalyzer:
 
     @staticmethod
     def _strength(r: float) -> str:
+        """Map absolute correlation magnitude to qualitative strength label."""
         ar = abs(r)
         if ar >= 0.8:
             return "very_strong"

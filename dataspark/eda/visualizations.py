@@ -16,6 +16,9 @@ import numpy as np
 import pandas as pd
 
 
+_DEFAULT_FIGSIZE = (10, 6)
+
+
 class PlotFactory:
     """Generate standard EDA plots."""
 
@@ -23,20 +26,22 @@ class PlotFactory:
         sns.set_style(style)
         self.figsize = figsize
 
-    def missing_heatmap(self, df: pd.DataFrame) -> plt.Figure:
+    @staticmethod
+    def missing_heatmap(df: pd.DataFrame, figsize: tuple = _DEFAULT_FIGSIZE) -> plt.Figure:
         """Heatmap of missing values."""
-        fig, ax = plt.subplots(figsize=self.figsize)
+        fig, ax = plt.subplots(figsize=figsize)
         sns.heatmap(df.isnull(), cbar=True, yticklabels=False, cmap="viridis", ax=ax)
         ax.set_title("Missing Values Heatmap")
         plt.tight_layout()
         return fig
 
+    @staticmethod
     def correlation_heatmap(
-        self, df: pd.DataFrame, method: str = "pearson"
+        df: pd.DataFrame, method: str = "pearson", figsize: tuple = _DEFAULT_FIGSIZE
     ) -> plt.Figure:
         """Correlation heatmap for numeric columns."""
         corr = df.select_dtypes(include="number").corr(method=method)
-        fig, ax = plt.subplots(figsize=self.figsize)
+        fig, ax = plt.subplots(figsize=figsize)
         mask = np.triu(np.ones_like(corr, dtype=bool))
         sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm",
                      center=0, ax=ax, square=True)
@@ -44,13 +49,17 @@ class PlotFactory:
         plt.tight_layout()
         return fig
 
-    def distribution_grid(self, df: pd.DataFrame, columns: list[str] | None = None) -> plt.Figure:
+    @staticmethod
+    def distribution_grid(
+        df: pd.DataFrame, columns: list[str] | None = None, figsize: tuple | None = None
+    ) -> plt.Figure:
         """Grid of histograms with KDE for numeric columns."""
         cols = columns or df.select_dtypes(include="number").columns.tolist()
         n = len(cols)
         ncols = min(3, n)
         nrows = (n + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
+        fig_size = figsize or (5 * ncols, 4 * nrows)
+        fig, axes = plt.subplots(nrows, ncols, figsize=fig_size)
         axes = np.atleast_1d(axes).flatten()
         for i, col in enumerate(cols):
             sns.histplot(df[col].dropna(), kde=True, ax=axes[i])
@@ -60,13 +69,17 @@ class PlotFactory:
         plt.tight_layout()
         return fig
 
-    def boxplot_grid(self, df: pd.DataFrame, columns: list[str] | None = None) -> plt.Figure:
+    @staticmethod
+    def boxplot_grid(
+        df: pd.DataFrame, columns: list[str] | None = None, figsize: tuple | None = None
+    ) -> plt.Figure:
         """Grid of box plots for outlier visualization."""
         cols = columns or df.select_dtypes(include="number").columns.tolist()
         n = len(cols)
         ncols = min(3, n)
         nrows = (n + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
+        fig_size = figsize or (5 * ncols, 4 * nrows)
+        fig, axes = plt.subplots(nrows, ncols, figsize=fig_size)
         axes = np.atleast_1d(axes).flatten()
         for i, col in enumerate(cols):
             sns.boxplot(y=df[col].dropna(), ax=axes[i])
@@ -76,7 +89,11 @@ class PlotFactory:
         plt.tight_layout()
         return fig
 
-    def pairplot(self, df: pd.DataFrame, hue: str | None = None) -> plt.Figure:
+    # Alias for notebook compatibility
+    box_grid = boxplot_grid
+
+    @staticmethod
+    def pairplot(df: pd.DataFrame, hue: str | None = None) -> plt.Figure:
         """Seaborn pairplot for numeric columns."""
         grid = sns.pairplot(df.select_dtypes(include="number"), hue=hue, diag_kind="kde")
         return grid.figure

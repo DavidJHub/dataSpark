@@ -67,6 +67,8 @@ class HypothesisTester:
             "group_means": [float(np.nanmean(g)) for g in groups],
         }
 
+    anova = one_way_anova
+
     @staticmethod
     def chi_squared(observed: pd.DataFrame) -> dict:
         """Chi-squared test of independence on a contingency table."""

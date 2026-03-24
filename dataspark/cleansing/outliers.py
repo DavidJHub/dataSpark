@@ -21,9 +21,11 @@ class OutlierDetector:
         method: Literal["iqr", "zscore", "mad", "isolation_forest"] = "iqr",
         threshold: float = 1.5,
         contamination: float = 0.05,
+        *,
+        factor: float | None = None,
     ) -> None:
         self.method = method
-        self.threshold = threshold
+        self.threshold = factor if factor is not None else threshold
         self.contamination = contamination
 
     def detect(self, df: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:

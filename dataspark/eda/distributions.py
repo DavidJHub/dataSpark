@@ -22,22 +22,25 @@ CANDIDATE_DISTRIBUTIONS = [
 class DistributionAnalyzer:
     """Analyze and fit statistical distributions to numeric data."""
 
-    def __init__(self, df: pd.DataFrame) -> None:
+    def __init__(self, df: pd.DataFrame | None = None) -> None:
         self.df = df
 
-    def fit_distributions(
-        self, column: str, candidates: list | None = None
+    def fit(
+        self, data: pd.Series | np.ndarray, candidates: list | None = None
     ) -> pd.DataFrame:
-        """Fit candidate distributions via MLE; rank by BIC / KS-test."""
-        data = self.df[column].dropna().values
+        """Fit candidate distributions via MLE; rank by BIC / KS-test.
+
+        Accepts raw data (Series or array) directly.
+        """
+        if isinstance(data, pd.Series):
+            data = data.dropna().values
+        data = np.asarray(data, dtype=float)
         dists = candidates or CANDIDATE_DISTRIBUTIONS
         results = []
         for dist in dists:
             try:
                 params = dist.fit(data)
-                # Kolmogorov-Smirnov test
                 ks_stat, ks_p = stats.kstest(data, dist.cdf, args=params)
-                # Log-likelihood & BIC
                 ll = np.sum(dist.logpdf(data, *params))
                 k = len(params)
                 n = len(data)
@@ -46,7 +49,7 @@ class DistributionAnalyzer:
                     "distribution": dist.name,
                     "params": params,
                     "ks_statistic": ks_stat,
-                    "ks_p_value": ks_p,
+                    "ks_pvalue": ks_p,
                     "log_likelihood": ll,
                     "bic": bic,
                 })
@@ -54,24 +57,40 @@ class DistributionAnalyzer:
                 logger.debug("Fit failed for {} — {}", dist.name, e)
         return pd.DataFrame(results).sort_values("bic").reset_index(drop=True)
 
-    def detect_multimodality(self, column: str) -> dict:
-        """Hartigan's dip test approximation for multimodality."""
-        data = np.sort(self.df[column].dropna().values)
+    def fit_distributions(
+        self, column: str, candidates: list | None = None
+    ) -> pd.DataFrame:
+        """Fit distributions using a column name from self.df (legacy API)."""
+        if self.df is None:
+            raise ValueError("DataFrame not set. Pass df to __init__ or use fit() directly.")
+        return self.fit(self.df[column].dropna(), candidates)
+
+    def multimodality(self, data: pd.Series | np.ndarray) -> dict:
+        """Check for multimodality. Accepts raw data directly."""
+        if isinstance(data, pd.Series):
+            data = data.dropna().values
+        data = np.sort(np.asarray(data, dtype=float))
         n = len(data)
-        # Simple bimodality coefficient (BC)
         skew = stats.skew(data)
         kurt = stats.kurtosis(data, fisher=True)
         bc = (skew ** 2 + 1) / (kurt + 3 * (n - 1) ** 2 / ((n - 2) * (n - 3)))
         return {
-            "column": column,
             "bimodality_coefficient": bc,
-            "likely_multimodal": bc > 0.555,
+            "is_multimodal": bc > 0.555,
             "skewness": skew,
             "excess_kurtosis": kurt,
         }
 
+    def detect_multimodality(self, column: str) -> dict:
+        """Detect multimodality using a column name from self.df (legacy API)."""
+        if self.df is None:
+            raise ValueError("DataFrame not set. Pass df to __init__ or use multimodality() directly.")
+        return self.multimodality(self.df[column].dropna())
+
     def quantile_analysis(self, column: str, quantiles: list[float] | None = None) -> dict:
         """Detailed quantile analysis."""
+        if self.df is None:
+            raise ValueError("DataFrame not set. Pass df to __init__.")
         q = quantiles or [0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99]
         data = self.df[column].dropna()
         return {

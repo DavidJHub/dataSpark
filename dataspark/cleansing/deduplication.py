@@ -1,7 +1,7 @@
-"""
-Deduplication Engine
-====================
-Exact and fuzzy duplicate detection for large-scale tabular data.
+"""Duplicate detection and removal helpers.
+
+This module provides exact and fuzzy deduplication utilities for tabular data.
+The fuzzy mode uses a lightweight character-bigram Jaccard similarity.
 """
 
 from __future__ import annotations
@@ -9,13 +9,26 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
 
 class Deduplicator:
-    """Detect and remove duplicate records — exact or fuzzy."""
+    """Detect and remove duplicate records using exact or fuzzy matching.
+
+    Parameters
+    ----------
+    strategy:
+        Duplicate strategy:
+
+        - ``"exact"`` uses :meth:`pandas.DataFrame.duplicated` semantics.
+        - ``"fuzzy"`` compares row text representations with a similarity
+          threshold.
+    similarity_threshold:
+        Minimum similarity score (0-1) used in fuzzy mode.
+    subset:
+        Optional list of columns that define the record identity.
+    """
 
     def __init__(
         self,
@@ -23,12 +36,17 @@ class Deduplicator:
         similarity_threshold: float = 0.85,
         subset: list[str] | None = None,
     ) -> None:
+        """Initialize deduplicator configuration."""
         self.strategy = strategy
         self.similarity_threshold = similarity_threshold
         self.subset = subset
 
     def find_duplicates(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Return duplicate rows (keeps first occurrence marked as non-duplicate)."""
+        """Return rows identified as duplicates.
+
+        In exact mode, the first occurrence is considered canonical and only
+        subsequent duplicates are returned.
+        """
         if self.strategy == "exact":
             mask = df.duplicated(subset=self.subset, keep="first")
         else:
@@ -38,7 +56,7 @@ class Deduplicator:
         return df[mask]
 
     def deduplicate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Remove duplicates and return cleaned DataFrame."""
+        """Remove duplicates and return the resulting dataframe."""
         if self.strategy == "exact":
             result = df.drop_duplicates(subset=self.subset, keep="first").reset_index(drop=True)
         else:
@@ -49,14 +67,22 @@ class Deduplicator:
         return result
 
     def hash_rows(self, df: pd.DataFrame) -> pd.Series:
-        """Compute a SHA-256 hash for each row (useful for large-scale dedup)."""
+        """Compute SHA-256 hash digest for each row.
+
+        This helper is useful for large-scale exact deduplication pipelines
+        where deterministic row fingerprints are required.
+        """
         cols = self.subset or df.columns.tolist()
         return df[cols].apply(
             lambda row: hashlib.sha256(str(row.values).encode()).hexdigest(), axis=1
         )
 
     def _fuzzy_duplicates(self, df: pd.DataFrame) -> pd.Series:
-        """Simple character-level similarity for string columns."""
+        """Build duplicate mask using pairwise fuzzy text comparison.
+
+        The algorithm performs greedy matching against previously kept rows.
+        Complexity is approximately O(n²) in the number of rows.
+        """
         cols = self.subset or df.select_dtypes(include="object").columns.tolist()
         if not cols:
             return df.duplicated(keep="first")
@@ -78,7 +104,18 @@ class Deduplicator:
 
     @staticmethod
     def _char_similarity(a: str, b: str) -> float:
-        """Simple Jaccard similarity on character bigrams."""
+        """Compute Jaccard similarity using character bigrams.
+
+        Parameters
+        ----------
+        a, b:
+            Input strings.
+
+        Returns
+        -------
+        float
+            Similarity score between 0 and 1.
+        """
         if not a or not b:
             return 0.0
         bigrams_a = {a[i : i + 2] for i in range(len(a) - 1)}

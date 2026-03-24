@@ -1,21 +1,51 @@
-"""
-Data Cleansing Pipeline
-=======================
-Handles missing values, type coercion, whitespace normalization,
-and column standardization for tabular data.
+"""Data cleansing pipeline utilities.
+
+This module centralizes common preprocessing operations for tabular datasets:
+
+- column-name normalization,
+- string whitespace cleanup,
+- missing-value profiling,
+- missing-value imputation/removal with multiple strategies.
+
+The main entry point is :class:`DataCleaner`, which follows a familiar
+``fit/transform`` API similar to scikit-learn estimators.
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
 
 class DataCleaner:
-    """Configurable data-cleansing pipeline for pandas DataFrames."""
+    """Configurable data-cleansing pipeline for :class:`pandas.DataFrame`.
+
+    The cleaner can standardize column names, trim whitespace in string
+    columns, and handle missing values using one of several strategies.
+    For statistical imputation strategies (``mean``, ``median``, ``mode``),
+    the learned fill values are computed in :meth:`fit` and reused in
+    :meth:`transform`.
+
+    Parameters
+    ----------
+    missing_strategy:
+        Strategy used to handle missing values.
+
+        - ``"drop"``: drop rows with any missing value.
+        - ``"mean"``: fill numeric columns with column means.
+        - ``"median"``: fill numeric columns with column medians.
+        - ``"mode"``: fill columns with most frequent value.
+        - ``"ffill"``: forward-fill followed by backward-fill.
+        - ``"knn"``: KNN imputation on numeric columns.
+    knn_neighbors:
+        Number of neighbors used when ``missing_strategy="knn"``.
+    standardize_columns:
+        If ``True``, apply :meth:`_standardize_columns` before other steps.
+    strip_whitespace:
+        If ``True``, apply :meth:`_strip_whitespace` to object columns.
+    """
 
     def __init__(
         self,
@@ -24,18 +54,30 @@ class DataCleaner:
         standardize_columns: bool = True,
         strip_whitespace: bool = True,
     ) -> None:
+        """Initialize cleansing configuration and internal state."""
         self.missing_strategy = missing_strategy
         self.knn_neighbors = knn_neighbors
         self.standardize_columns = standardize_columns
         self.strip_whitespace = strip_whitespace
         self._fill_values: dict[str, float] = {}
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def fit(self, df: pd.DataFrame) -> "DataCleaner":
-        """Learn fill values from training data (for mean/median/mode)."""
+        """Learn imputation values from a training dataset.
+
+        For ``mean``, ``median``, and ``mode`` strategies, this method stores
+        per-column values in ``self._fill_values``. For the other strategies,
+        fitting is a no-op and the cleaner is returned unchanged.
+
+        Parameters
+        ----------
+        df:
+            Training dataframe used to estimate imputation statistics.
+
+        Returns
+        -------
+        DataCleaner
+            The same cleaner instance (to allow method chaining).
+        """
         numeric = df.select_dtypes(include="number")
         if self.missing_strategy == "mean":
             self._fill_values = numeric.mean().to_dict()
@@ -47,7 +89,24 @@ class DataCleaner:
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Apply the full cleansing pipeline and return a clean DataFrame."""
+        """Run the configured cleansing pipeline.
+
+        Processing order:
+
+        1. Optional column standardization.
+        2. Optional string whitespace trimming.
+        3. Missing-value handling via :meth:`_handle_missing`.
+
+        Parameters
+        ----------
+        df:
+            Input dataframe.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A new dataframe with the cleansing operations applied.
+        """
         df = df.copy()
         if self.standardize_columns:
             df = self._standardize_columns(df)
@@ -58,10 +117,35 @@ class DataCleaner:
         return df
 
     def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Fit cleaner statistics and transform data in one call.
+
+        Parameters
+        ----------
+        df:
+            Input dataframe used both for fitting and transformation.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Cleansed dataframe.
+        """
         return self.fit(df).transform(df)
 
     def profile_missing(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Return a summary of missing values per column."""
+        """Generate a per-column missing-value summary.
+
+        Parameters
+        ----------
+        df:
+            Input dataframe to profile.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Summary table with ``missing_count`` and ``missing_pct`` for each
+            column containing at least one missing value, sorted descending by
+            missing percentage.
+        """
         total = len(df)
         missing = df.isnull().sum()
         pct = (missing / total) * 100
@@ -71,12 +155,14 @@ class DataCleaner:
             .query("missing_count > 0")
         )
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize column names to snake_case-like identifiers.
+
+        The method strips surrounding whitespace, lowercases text, replaces
+        non-word character groups with underscores, and trims underscores
+        at the edges.
+        """
         df.columns = (
             df.columns.str.strip()
             .str.lower()
@@ -87,24 +173,31 @@ class DataCleaner:
 
     @staticmethod
     def _strip_whitespace(df: pd.DataFrame) -> pd.DataFrame:
+        """Trim leading/trailing whitespace in object/string columns."""
         str_cols = df.select_dtypes(include="object").columns
         for col in str_cols:
             df[col] = df[col].str.strip()
         return df
 
     def _handle_missing(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply missing-value strategy configured on the cleaner.
+
+        Notes
+        -----
+        For ``mean/median/mode`` strategies, numeric columns are imputed with
+        fitted values when available, and categorical columns are filled with
+        their current mode during transformation.
+        """
         if self.missing_strategy == "drop":
             return df.dropna()
         if self.missing_strategy == "ffill":
             return df.ffill().bfill()
         if self.missing_strategy == "knn":
             return self._knn_impute(df)
-        # mean / median / mode
         numeric = df.select_dtypes(include="number").columns
         for col in numeric:
             if col in self._fill_values:
                 df[col] = df[col].fillna(self._fill_values[col])
-        # categorical → mode
         cat_cols = df.select_dtypes(include=["object", "category"]).columns
         for col in cat_cols:
             mode_val = df[col].mode()
@@ -113,6 +206,11 @@ class DataCleaner:
         return df
 
     def _knn_impute(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Impute numeric missing values with k-nearest neighbors.
+
+        Non-numeric columns are preserved and concatenated back after numeric
+        imputation.
+        """
         from sklearn.impute import KNNImputer
 
         numeric = df.select_dtypes(include="number")

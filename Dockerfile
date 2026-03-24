@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[dev]"
+RUN pip install --no-cache-dir ".[dev,notebooks,torch]"
 
 # Copy source
 COPY . .
 RUN pip install -e .
+
+EXPOSE 8888
 
 # Default: run tests
 CMD ["pytest", "-v", "--cov=dataspark"]

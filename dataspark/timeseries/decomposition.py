@@ -28,11 +28,12 @@ class TimeSeriesDecomposer:
         self.period = period
 
     def decompose(
-        self, series: pd.Series, model: Literal["additive", "multiplicative"] = "additive"
+        self, series: pd.Series, model: Literal["additive", "multiplicative"] = "additive",
+        period: int | None = None,
     ) -> dict:
         """Return decomposition components as a dict of Series."""
         series = series.dropna()
-        period = self.period or self._estimate_period(series)
+        period = period or self.period or self._estimate_period(series)
 
         if self.method == "stl":
             result = STL(series, period=period).fit()

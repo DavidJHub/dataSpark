@@ -29,8 +29,8 @@ class TestPipelineBuilder:
         builder = PipelineBuilder(task="classification")
         pipe = builder.build(X, model_name="random_forest")
         results = builder.cross_validate(pipe, X, y, cv=3)
-        assert "test_accuracy_mean" in results
-        assert results["test_accuracy_mean"] > 0.5
+        assert "test_accuracy" in results
+        assert results["test_accuracy"].mean() > 0.5
 
     def test_mixed_dtypes(self):
         """Pipeline handles mixed numeric + categorical data."""

@@ -35,15 +35,17 @@ class ModelSelector:
         X: pd.DataFrame,
         y: pd.Series,
         models: dict[str, Any] | None = None,
+        cv: int | None = None,
     ) -> pd.DataFrame:
         """Cross-validate all candidate models and return ranked results."""
+        cv_folds = cv if cv is not None else self.cv
         builder = PipelineBuilder(task=self.task)
         catalog = models or (CLASSIFIERS if self.task == "classification" else REGRESSORS)
         rows = []
         for name, estimator in catalog.items():
             pipe = builder.build(X, model=estimator)
             cv_results = cross_validate(
-                pipe, X, y, cv=self.cv, scoring=self.scoring, return_train_score=True
+                pipe, X, y, cv=cv_folds, scoring=self.scoring, return_train_score=True
             )
             rows.append({
                 "model": name,
@@ -61,24 +63,58 @@ class ModelSelector:
 
     def hyperparameter_search(
         self,
-        pipeline: Pipeline,
-        X: pd.DataFrame,
-        y: pd.Series,
-        param_grid: dict,
+        X_or_pipeline: pd.DataFrame | Pipeline,
+        y: pd.Series | None = None,
+        param_grid: dict | None = None,
+        *,
+        model_name: str | None = None,
+        pipeline: Pipeline | None = None,
         method: Literal["grid", "random"] = "random",
+        search_type: str | None = None,
         n_iter: int = 50,
+        cv: int | None = None,
     ) -> dict:
-        """Grid or randomized search over hyperparameters."""
-        if method == "grid":
+        """Grid or randomized search over hyperparameters.
+
+        Can be called as:
+        - hyperparameter_search(X, y, model_name="random_forest", param_grid=..., search_type="grid")
+        - hyperparameter_search(pipeline, X, y, param_grid, method="grid")  (legacy)
+        """
+        cv_folds = cv if cv is not None else self.cv
+        search_method = search_type if search_type is not None else method
+
+        # Detect calling convention
+        if isinstance(X_or_pipeline, Pipeline):
+            # Legacy: hyperparameter_search(pipeline, X, y, param_grid)
+            pipe = X_or_pipeline
+            X_data = y
+            y_data = param_grid
+            grid = model_name  # positional shift
+            if not isinstance(X_data, (pd.DataFrame, np.ndarray)):
+                raise TypeError("When passing a Pipeline as first arg, second arg must be X (data)")
+        else:
+            # New: hyperparameter_search(X, y, model_name=..., param_grid=...)
+            X_data = X_or_pipeline
+            y_data = y
+            grid = param_grid
+            if model_name is not None:
+                builder = PipelineBuilder(task=self.task)
+                pipe = builder.build(X_data, model_name=model_name)
+            elif pipeline is not None:
+                pipe = pipeline
+            else:
+                raise ValueError("Must specify either model_name or pipeline")
+
+        if search_method == "grid":
             search = GridSearchCV(
-                pipeline, param_grid, cv=self.cv, scoring=self.scoring, n_jobs=-1
+                pipe, grid, cv=cv_folds, scoring=self.scoring, n_jobs=-1
             )
         else:
             search = RandomizedSearchCV(
-                pipeline, param_grid, n_iter=n_iter, cv=self.cv,
+                pipe, grid, n_iter=n_iter, cv=cv_folds,
                 scoring=self.scoring, n_jobs=-1, random_state=42
             )
-        search.fit(X, y)
+        search.fit(X_data, y_data)
         logger.info("Best score: {:.4f} with params: {}", search.best_score_, search.best_params_)
         return {
             "best_score": search.best_score_,

@@ -36,9 +36,9 @@ class TestSampler:
     def test_bootstrap(self, sample_df):
         sampler = Sampler()
         result = sampler.bootstrap_sample(sample_df, n_samples=500, column="income")
-        assert "ci_95_lower" in result
-        assert "ci_95_upper" in result
-        assert result["ci_95_lower"] < result["ci_95_upper"]
+        assert "ci_lower" in result
+        assert "ci_upper" in result
+        assert result["ci_lower"] < result["ci_upper"]
 
     def test_sample_size_calculator(self):
         sampler = Sampler()

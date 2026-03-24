@@ -21,6 +21,9 @@ class Forecaster:
         method: Literal["arima", "exp_smoothing", "rolling_mean"] = "arima",
     ) -> None:
         self.method = method
+        # Accept common aliases
+        if self.method == "exponential_smoothing":
+            self.method = "exp_smoothing"
         self._model = None
 
     def fit(self, series: pd.Series, **kwargs) -> "Forecaster":
@@ -43,8 +46,19 @@ class Forecaster:
         forecast = self._model.forecast(steps)
         return forecast
 
-    def evaluate(self, train: pd.Series, test: pd.Series) -> dict:
-        """Fit on train, predict test length, return error metrics."""
+    def evaluate(self, train: pd.Series, test: pd.Series | None = None, *, test_size: int | None = None) -> dict:
+        """Fit on train, predict test length, return error metrics.
+
+        Can be called as:
+        - evaluate(train_series, test_series)
+        - evaluate(full_series, test_size=8)  — splits internally
+        """
+        if test is None and test_size is not None:
+            full = train
+            train = full.iloc[:-test_size]
+            test = full.iloc[-test_size:]
+        elif test is None:
+            raise ValueError("Must provide test series or test_size")
         self.fit(train)
         preds = self.predict(steps=len(test))
         preds.index = test.index

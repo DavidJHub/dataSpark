@@ -16,9 +16,21 @@ class TimeSeriesFeatureExtractor:
 
     @staticmethod
     def rolling_features(
-        series: pd.Series, windows: list[int] | None = None
+        data: pd.Series | pd.DataFrame,
+        windows: list[int] | None = None,
+        *,
+        column: str | None = None,
     ) -> pd.DataFrame:
-        """Compute rolling statistics for multiple window sizes."""
+        """Compute rolling statistics for multiple window sizes.
+
+        Accepts a Series or a DataFrame with a column parameter.
+        """
+        if isinstance(data, pd.DataFrame):
+            if column is None:
+                column = data.select_dtypes(include="number").columns[0]
+            series = data[column]
+        else:
+            series = data
         windows = windows or [7, 14, 30, 90]
         df = pd.DataFrame(index=series.index)
         for w in windows:
@@ -30,8 +42,22 @@ class TimeSeriesFeatureExtractor:
         return df
 
     @staticmethod
-    def lag_features(series: pd.Series, lags: list[int] | None = None) -> pd.DataFrame:
-        """Create lag features."""
+    def lag_features(
+        data: pd.Series | pd.DataFrame,
+        lags: list[int] | None = None,
+        *,
+        column: str | None = None,
+    ) -> pd.DataFrame:
+        """Create lag features.
+
+        Accepts a Series or a DataFrame with a column parameter.
+        """
+        if isinstance(data, pd.DataFrame):
+            if column is None:
+                column = data.select_dtypes(include="number").columns[0]
+            series = data[column]
+        else:
+            series = data
         lags = lags or [1, 2, 3, 7, 14, 30]
         df = pd.DataFrame(index=series.index)
         for lag in lags:
@@ -39,8 +65,14 @@ class TimeSeriesFeatureExtractor:
         return df
 
     @staticmethod
-    def datetime_features(index: pd.DatetimeIndex) -> pd.DataFrame:
-        """Extract calendar features from a DatetimeIndex."""
+    def datetime_features(data: pd.DatetimeIndex | pd.DataFrame) -> pd.DataFrame:
+        """Extract calendar features from a DatetimeIndex or DataFrame with datetime index."""
+        if isinstance(data, pd.DataFrame):
+            index = data.index
+        else:
+            index = data
+        if not isinstance(index, pd.DatetimeIndex):
+            index = pd.DatetimeIndex(index)
         return pd.DataFrame({
             "year": index.year,
             "month": index.month,
@@ -62,7 +94,6 @@ class TimeSeriesFeatureExtractor:
         df["win_kurtosis"] = series.rolling(window).kurt()
         df["win_range"] = series.rolling(window).max() - series.rolling(window).min()
         df["win_cv"] = series.rolling(window).std() / series.rolling(window).mean()
-        # Percent change features
         df["pct_change_1"] = series.pct_change(1)
         df["pct_change_7"] = series.pct_change(7)
         return df

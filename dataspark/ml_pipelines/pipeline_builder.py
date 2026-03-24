@@ -113,9 +113,5 @@ class PipelineBuilder:
                 else ["r2", "neg_mean_squared_error", "neg_mean_absolute_error"]
             )
         results = cross_validate(pipeline, X, y, cv=cv, scoring=scoring, return_train_score=True)
-        summary = {}
-        for key, vals in results.items():
-            summary[key + "_mean"] = float(np.mean(vals))
-            summary[key + "_std"] = float(np.std(vals))
         logger.info("CV complete — {} folds", cv)
-        return summary
+        return results

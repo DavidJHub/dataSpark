@@ -67,7 +67,7 @@ class TestDistributionAnalyzer:
         analyzer = DistributionAnalyzer(sample_df)
         result = analyzer.detect_multimodality("score")
         assert "bimodality_coefficient" in result
-        assert "likely_multimodal" in result
+        assert "is_multimodal" in result
 
     def test_quantile_analysis(self, sample_df):
         analyzer = DistributionAnalyzer(sample_df)

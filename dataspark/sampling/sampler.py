@@ -60,8 +60,12 @@ class Sampler:
         logger.info("Cluster sample: {} clusters, {} rows", len(selected), len(result))
         return result
 
-    def systematic_sample(self, df: pd.DataFrame, k: int) -> pd.DataFrame:
-        """Every k-th element with a random start."""
+    def systematic_sample(self, df: pd.DataFrame, k: int | None = None, *, n: int | None = None) -> pd.DataFrame:
+        """Every k-th element with a random start. Alternatively specify n for desired sample size."""
+        if n is not None and k is None:
+            k = max(1, len(df) // n)
+        elif k is None:
+            raise ValueError("Must specify either k or n")
         start = self.rng.integers(0, k)
         indices = np.arange(start, len(df), k)
         result = df.iloc[indices].reset_index(drop=True)
@@ -96,10 +100,10 @@ class Sampler:
         return {
             "statistic": statistic,
             "column": col,
-            "mean": float(np.mean(boot_stats)),
+            "statistic_value": float(np.mean(boot_stats)),
             "std": float(np.std(boot_stats)),
-            "ci_95_lower": float(np.percentile(boot_stats, 2.5)),
-            "ci_95_upper": float(np.percentile(boot_stats, 97.5)),
+            "ci_lower": float(np.percentile(boot_stats, 2.5)),
+            "ci_upper": float(np.percentile(boot_stats, 97.5)),
             "n_samples": n_samples,
         }
 

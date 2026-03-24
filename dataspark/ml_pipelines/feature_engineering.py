@@ -49,30 +49,36 @@ class FeatureEngineer:
     @staticmethod
     def select_k_best(
         X: pd.DataFrame, y: pd.Series, k: int = 10, task: str = "classification"
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, list[str]]:
         """Select top-k features by mutual information or F-regression."""
+        X_num = X.select_dtypes(include="number").dropna(axis=0)
+        y_aligned = y.loc[X_num.index]
         score_func = mutual_info_classif if task == "classification" else f_regression
-        selector = SelectKBest(score_func=score_func, k=min(k, X.shape[1]))
-        selector.fit(X.select_dtypes(include="number"), y)
+        selector = SelectKBest(score_func=score_func, k=min(k, X_num.shape[1]))
+        selector.fit(X_num, y_aligned)
+        mask = selector.get_support()
+        selected = X_num.columns[mask].tolist()
         scores = pd.DataFrame({
-            "feature": X.select_dtypes(include="number").columns,
+            "feature": X_num.columns,
             "score": selector.scores_,
         }).sort_values("score", ascending=False)
         logger.info("Top {} features selected", k)
-        return scores
+        return scores, selected
 
     @staticmethod
     def pca_reduce(
         X: pd.DataFrame, n_components: int | float = 0.95
-    ) -> tuple[np.ndarray, PCA]:
+    ) -> tuple[pd.DataFrame, PCA]:
         """PCA dimensionality reduction."""
+        X_num = X.select_dtypes(include="number").dropna(axis=0)
         pca = PCA(n_components=n_components, random_state=42)
-        transformed = pca.fit_transform(X.select_dtypes(include="number"))
+        transformed = pca.fit_transform(X_num)
         logger.info(
             "PCA: {} → {} components (explained variance: {:.1f}%)",
             X.shape[1], pca.n_components_, pca.explained_variance_ratio_.sum() * 100,
         )
-        return transformed, pca
+        columns = [f"PC{i+1}" for i in range(transformed.shape[1])]
+        return pd.DataFrame(transformed, columns=columns, index=X_num.index), pca
 
 
 class BinningTransformer(BaseEstimator, TransformerMixin):

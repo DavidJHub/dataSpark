@@ -1,7 +1,8 @@
-"""
-Parametric Hypothesis Testing
-=============================
-t-tests, ANOVA, chi-squared, and proportion tests.
+"""Parametric hypothesis testing utilities.
+
+This module groups common parametric significance tests in
+:class:`HypothesisTester` and returns structured dictionary outputs suitable
+for reporting pipelines and dashboards.
 """
 
 from __future__ import annotations
@@ -11,11 +12,10 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from scipy import stats
-from loguru import logger
 
 
 class HypothesisTester:
-    """Parametric hypothesis tests with structured result output."""
+    """Parametric hypothesis tests with standardized result dictionaries."""
 
     @staticmethod
     def t_test(
@@ -24,7 +24,23 @@ class HypothesisTester:
         alternative: Literal["two-sided", "less", "greater"] = "two-sided",
         equal_var: bool = False,
     ) -> dict:
-        """Independent samples t-test (Welch's by default)."""
+        """Run independent-samples t-test.
+
+        Parameters
+        ----------
+        group_a, group_b:
+            Numeric samples from two independent groups.
+        alternative:
+            Alternative hypothesis for the test.
+        equal_var:
+            If ``False`` (default), Welch's t-test is used. If ``True``,
+            Student's t-test with equal variances is used.
+
+        Returns
+        -------
+        dict
+            Test name, statistic, p-value, direction, sample means and sizes.
+        """
         stat, p = stats.ttest_ind(group_a, group_b, equal_var=equal_var, alternative=alternative)
         return {
             "test": "Welch's t-test" if not equal_var else "Student's t-test",
@@ -43,7 +59,15 @@ class HypothesisTester:
         after: np.ndarray | pd.Series,
         alternative: Literal["two-sided", "less", "greater"] = "two-sided",
     ) -> dict:
-        """Paired samples t-test."""
+        """Run paired-samples t-test for repeated measurements.
+
+        Parameters
+        ----------
+        before, after:
+            Aligned measurements from the same entities at two time points.
+        alternative:
+            Alternative hypothesis for paired difference.
+        """
         stat, p = stats.ttest_rel(before, after, alternative=alternative)
         diff = np.asarray(after) - np.asarray(before)
         return {
@@ -56,7 +80,13 @@ class HypothesisTester:
 
     @staticmethod
     def one_way_anova(*groups: np.ndarray | pd.Series) -> dict:
-        """One-way ANOVA F-test."""
+        """Run one-way ANOVA F-test across multiple groups.
+
+        Parameters
+        ----------
+        *groups:
+            Two or more numeric group arrays/series.
+        """
         stat, p = stats.f_oneway(*groups)
         return {
             "test": "one_way_anova",
@@ -71,7 +101,13 @@ class HypothesisTester:
 
     @staticmethod
     def chi_squared(observed: pd.DataFrame) -> dict:
-        """Chi-squared test of independence on a contingency table."""
+        """Run chi-squared test of independence on contingency table.
+
+        Parameters
+        ----------
+        observed:
+            Contingency table of observed counts.
+        """
         chi2, p, dof, expected = stats.chi2_contingency(observed)
         return {
             "test": "chi_squared",
@@ -82,11 +118,16 @@ class HypothesisTester:
         }
 
     @staticmethod
-    def proportion_z_test(
-        successes_a: int, n_a: int,
-        successes_b: int, n_b: int,
-    ) -> dict:
-        """Two-proportion z-test."""
+    def proportion_z_test(successes_a: int, n_a: int, successes_b: int, n_b: int) -> dict:
+        """Run two-proportion z-test.
+
+        Parameters
+        ----------
+        successes_a, n_a:
+            Success count and sample size for group A.
+        successes_b, n_b:
+            Success count and sample size for group B.
+        """
         p1 = successes_a / n_a
         p2 = successes_b / n_b
         p_pool = (successes_a + successes_b) / (n_a + n_b)
